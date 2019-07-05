@@ -3,7 +3,7 @@ defmodule Bamboo.MailgunAdapter do
   Sends email using Mailgun's API.
 
   Use this adapter to send emails through Mailgun's API. Requires that an API
-  key and a domain are set in the config.
+  key, domain is pulled up from from field in mail.
 
   ## Example config
 
@@ -11,7 +11,6 @@ defmodule Bamboo.MailgunAdapter do
       config :my_app, MyApp.Mailer,
         adapter: Bamboo.MailgunAdapter,
         api_key: "my_api_key" # or {:system, "MAILGUN_API_KEY"},
-        domain: "your.domain" # or {:system, "MAILGUN_DOMAIN"}
 
       # Define a Mailer. Maybe in lib/my_app/mailer.ex
       defmodule MyApp.Mailer do
@@ -30,7 +29,6 @@ defmodule Bamboo.MailgunAdapter do
   def handle_config(config) do
     config
     |> Map.put(:api_key, get_setting(config, :api_key))
-    |> Map.put(:domain, get_setting(config, :domain))
   end
 
   defp get_setting(config, key) do
@@ -65,7 +63,7 @@ defmodule Bamboo.MailgunAdapter do
     body = to_mailgun_body(email)
     config = handle_config(config)
 
-    case :hackney.post(full_uri(config), headers(email, config), body, [:with_body]) do
+    case :hackney.post(full_uri(email), headers(email, config), body, [:with_body]) do
       {:ok, status, _headers, response} when status > 299 ->
         raise_api_error(@service_name, response, body)
 
@@ -80,9 +78,11 @@ defmodule Bamboo.MailgunAdapter do
   @doc false
   def supports_attachments?, do: true
 
-  defp full_uri(config) do
+  defp full_uri(%Email{from: {_, address}}) do
+    [_, domain] = String.split(address, "@")
+
     Application.get_env(:bamboo, :mailgun_base_uri, @base_uri) <>
-      "/" <> config.domain <> "/messages"
+      "/" <> domain <> "/messages"
   end
 
   defp headers(%Email{} = email, config) do
